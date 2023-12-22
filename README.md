@@ -92,6 +92,13 @@ sudo touch upstream20048.conf upstream2049.conf upstream111.conf upstreams.conf
 cd /etc/nginx/record
 sudo touch record.txt
 ```
+Upstream20048,2049,111 are simple files who rproxy import ad use for map specific src address to an nginx upstream. \
+scompose it in more file make manage mapped ip more easy by golang code. \
+Upstreams file contain all upstreams directive for all port. \
+When an client try to connect to this proxy, the proxy try to match the ip address, if it dont match is dropped, if match is redirected to specific upstream contained in upstreams file. \
+This is done for port 2049,20048,111. \
+Record.txt contain a simple list of forward with srcip:destip:clientname format. \
+It is usefull for track every forward better and faster. \
 
 Now Nginx server is ready for apiproxy so we can restart it:
 ``` bash

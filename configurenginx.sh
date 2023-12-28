@@ -4,22 +4,24 @@ ROOT_UID=0                                                                      
 USER_UID=$(id -u)
 ERR_NOTROOT=86
 
-wget https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-sudo tar -C /usr/local -xvf go1.21.5.linux-amd64.tar.gz
-echo "export PATH=\$PATH:/usr/local/go/bin">>~/.profile
-sopurce ~/.profile
-
-if [ "$USER_UID" -ne "$ROOT_UID" ]                                                                                                                  #controlla se l'utente è root
-    then
-    echo "Must be root to run this function."
-    exit $ERR_NOTROOT
-    fi
 echo "<<SYSTEM UPGRADE>>"
 apt-get update
 apt-get upgrade -y
 echo "<<INSTALL NGINX>>"
 apt-get install nginx -y 
 apt-get install nginx-mod-stream -y
+echo "<<INSTALL GO>>"
+wget https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
+sudo tar -C /usr/local -xvf go1.21.5.linux-amd64.tar.gz
+echo "export PATH=\$PATH:/usr/local/go/bin">>~/.profile
+source ~/.profile
+
+if [ "$USER_UID" -ne "$ROOT_UID" ]                                                                                                                  #controlla se l'utente è root
+    then
+    echo "Must be root to run this function."
+    exit $ERR_NOTROOT
+    fi
+
 echo "<<REMOVE DEFAULT NGINX CONFIGURATION>>"
 unlink /etc/nginx/sites-enabled/default
 

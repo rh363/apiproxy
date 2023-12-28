@@ -5,7 +5,7 @@ NAME=APIPROXY
 AUTHOR=RH363
 DATE=12/2023
 COMPANY=SEEWEB
-VERSION=1.0
+VERSION=1.1
 
 DESCRIPTION:
 
@@ -51,6 +51,8 @@ var UpstreamsFile string = "upstreams.config"
 var Upstream20048File string = "upstream20048.config"
 var Upstream2049File string = "upstream2049.config"
 var Upstream111File string = "upstream111.config"
+var Upstream445File string = "upstream445.config"
+var Upstream139File string = "upstream139.config"
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ FILES PATH
 var ChangesPath string = "/etc/nginx/record/" + ChangesFile
@@ -61,6 +63,8 @@ var UpstreamsPath string = "/etc/nginx/conf/" + UpstreamsFile
 var Upstream20048Path string = "/etc/nginx/conf/" + Upstream20048File
 var Upstream2049Path string = "/etc/nginx/conf/" + Upstream2049File
 var Upstream111Path string = "/etc/nginx/conf/" + Upstream111File
+var Upstream445Path string = "/etc/nginx/conf/" + Upstream445File
+var Upstream139Path string = "/etc/nginx/conf/" + Upstream139File
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ FILE READ ERROR
 var ErrCantReadRecordFile error = errors.New("unable to read " + RecordFile + " located in: " + RecordPath)
@@ -68,6 +72,8 @@ var ErrCantReadUpstreamsFile error = errors.New("unable to read " + UpstreamsFil
 var ErrCantReadUpstream20048File error = errors.New("unable to read " + Upstream20048File + " located in: " + Upstream20048Path)
 var ErrCantReadUpstream2049File error = errors.New("unable to read " + Upstream2049File + " located in: " + Upstream2049Path)
 var ErrCantReadUpstream111File error = errors.New("unable to read " + Upstream111File + " located in: " + Upstream111Path)
+var ErrCantReadUpstream445File error = errors.New("unable to read " + Upstream445File + " located in: " + Upstream445Path)
+var ErrCantReadUpstream139File error = errors.New("unable to read " + Upstream139File + " located in: " + Upstream139Path)
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ FILE WRITE ERROR
 var ErrCantWriteRecordFile error = errors.New("unable to write " + RecordFile + " located in: " + RecordPath)
@@ -75,6 +81,8 @@ var ErrCantWriteUpstreamsFile error = errors.New("unable to write " + UpstreamsF
 var ErrCantWriteUpstream20048File error = errors.New("unable to write " + Upstream20048File + " located in: " + Upstream20048Path)
 var ErrCantWriteUpstream2049File error = errors.New("unable to write " + Upstream2049File + " located in: " + Upstream2049Path)
 var ErrCantWriteUpstream111File error = errors.New("unable to write " + Upstream111File + " located in: " + Upstream111Path)
+var ErrCantWriteUpstream445File error = errors.New("unable to Write " + Upstream445File + " located in: " + Upstream445Path)
+var ErrCantWriteUpstream139File error = errors.New("unable to Write " + Upstream139File + " located in: " + Upstream139Path)
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ NGINX ERROR
 var ErrCantRunRestartNginx error = errors.New("unable to restart proxy via api, post method temporarily offline, contact sysadmin please")
@@ -154,12 +162,20 @@ var explain = []Response{
 	{Message: "WARNING all instruction behind ** chars must be replaced with your data"},
 	{Message: "For get your config file content send a GET request to: /apiproxy/rproxy/conf"},
 	{Message: "For get current forward send a GET request to: /apiproxy/rproxy/forward"},
-	{Message: "For create a new forward send a POST request to: /apiproxy/rproxy/forward"},
+	{Message: "For get current nfs forward send a GET request to: /apiproxy/rproxy/forward/nfs"},
+	{Message: "For get current smb forward send a GET request to: /apiproxy/rproxy/forward/smb"},
+	{Message: "For create a new nfs forward send a POST request to: /apiproxy/rproxy/forward/nfs"},
+	{Message: `WARNING using POST request for create a new forward require an json file with the following structure:`},
+	{Message: `{"src" : "*address to forward*","dest" : "*target address*","client" : "*client name*"}`},
+	{Message: `EX: {"src" : "10.2.15.235","dest" : "192.168.1.150","client" : "my client name"}`},
+	{Message: "For create a new smb forward send a POST request to: /apiproxy/rproxy/forward/smb"},
 	{Message: `WARNING using POST request for create a new forward require an json file with the following structure:`},
 	{Message: `{"src" : "*address to forward*","dest" : "*target address*","client" : "*client name*"}`},
 	{Message: `EX: {"src" : "10.2.15.235","dest" : "192.168.1.150","client" : "my client name"}`},
 	{Message: `WARNING if you use apik3s is recommended use for label "client" the same name of client workspace`},
-	{Message: "For delete an forward send a DELETE request to: /apiproxy/rproxy/forward/*client name*/*address forwarded*/*target address*"},
+	{Message: "For delete an nfs forward send a DELETE request to: /apiproxy/rproxy/forward/nfs/*client name*/*address forwarded*/*target address*"},
+	{Message: "For delete an smb forward send a DELETE request to: /apiproxy/rproxy/forward/smb/*client name*/*address forwarded*/*target address*"},
+	{Message: "For delete all forward send a DELETE request to: /apiproxy/rproxy/forward/"},
 	{Message: "For get current api status send a GET request to: /apiproxy/rproxy/status"},
 }
 
@@ -173,6 +189,13 @@ type Response struct { // generic response for json transfer
 }
 
 type Forward struct { // forward struct for json transfer
+	Src    string `json:"src"`
+	Dest   string `json:"dest"`
+	Client string `json:"client"`
+	Type   string `json:"type"`
+}
+
+type ForwardRequest struct { // forward struct for json transfer
 	Src    string `json:"src"`
 	Dest   string `json:"dest"`
 	Client string `json:"client"`
@@ -220,6 +243,16 @@ func getconfigs(context *gin.Context) { //GET ALL CONFIGURATION FILE CONTENT AND
 		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstream111File.Error()})
 		return
 	}
+	upstream445File, err := ReadFile(Upstream445Path) // read upstream445 file
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstream445File.Error()})
+		return
+	}
+	upstream139File, err := ReadFile(Upstream139Path) // read upstream139 file
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstream139File.Error()})
+		return
+	}
 
 	// read every file line for line and append it to []ConfigurationFile called configfiles
 	txt = ""
@@ -246,6 +279,18 @@ func getconfigs(context *gin.Context) { //GET ALL CONFIGURATION FILE CONTENT AND
 	}
 	configfiles = append(configfiles, ConfigurationFile{File: Upstream111File, Body: txt})
 
+	txt = ""
+	for _, line := range upstream445File {
+		txt = txt + line
+	}
+	configfiles = append(configfiles, ConfigurationFile{File: Upstream445File, Body: txt})
+
+	txt = ""
+	for _, line := range upstream139File {
+		txt = txt + line
+	}
+	configfiles = append(configfiles, ConfigurationFile{File: Upstream139File, Body: txt})
+
 	context.IndentedJSON(http.StatusOK, configfiles) //return json
 }
 
@@ -259,14 +304,52 @@ func getforward(context *gin.Context) { // GET ALL FORWARD CONNECTION USING RECO
 	}
 
 	for _, line := range recordFile {
-		sline := strings.Split(line, ":")                                                     // split record file line by content
-		forwards = append(forwards, Forward{Src: sline[0], Dest: sline[1], Client: sline[2]}) // append every content in specific location in []Forward called forwards
+		sline := strings.Split(line, ":")                                                                     // split record file line by content
+		forwards = append(forwards, Forward{Src: sline[0], Dest: sline[1], Client: sline[2], Type: sline[3]}) // append every content in specific location in []Forward called forwards
 	}
 
 	context.IndentedJSON(http.StatusOK, forwards) // return json
 }
 
-func createforward(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORWARD DATA IN JSON FORMAT LIKE "Forward" STRUCT
+func getforwardnfs(context *gin.Context) { // GET ALL FORWARD CONNECTION USING RECORD FILE AN RETURN A JSON OF IT
+	var forwards []Forward
+
+	recordFile, err := ReadFile(RecordPath) // read record file
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadRecordFile.Error()})
+		return
+	}
+
+	for _, line := range recordFile {
+		sline := strings.Split(line, ":") // split record file line by content
+		if sline[3] == "nfs" {
+			forwards = append(forwards, Forward{Src: sline[0], Dest: sline[1], Client: sline[2], Type: sline[3]}) // append every content in specific location in []Forward called forwards
+		}
+	}
+
+	context.IndentedJSON(http.StatusOK, forwards) // return json
+}
+
+func getforwardsmb(context *gin.Context) { // GET ALL FORWARD CONNECTION USING RECORD FILE AN RETURN A JSON OF IT
+	var forwards []Forward
+
+	recordFile, err := ReadFile(RecordPath) // read record file
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadRecordFile.Error()})
+		return
+	}
+
+	for _, line := range recordFile {
+		sline := strings.Split(line, ":") // split record file line by content
+		if sline[3] == "smb" {
+			forwards = append(forwards, Forward{Src: sline[0], Dest: sline[1], Client: sline[2], Type: sline[3]}) // append every content in specific location in []Forward called forwards
+		}
+	}
+
+	context.IndentedJSON(http.StatusOK, forwards) // return json
+}
+
+func createforwardnfs(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORWARD DATA IN JSON FORMAT LIKE "Forward" STRUCT
 
 	if err := restartnginx(); err != nil { // check if can run restartnginx script
 		if CanRestart == false { //check if configs file is not compromised
@@ -277,11 +360,12 @@ func createforward(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORW
 		return
 	}
 
-	var forward Forward
+	var forward ForwardRequest
 	if err := context.BindJSON(&forward); err != nil { //get forward data received and bind it to forward var
 		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrBadJsonFormat.Error()})
 		return
 	}
+
 	upstream20048 := []string{ //create upstream20048 directive
 		"\n",
 		forward.Src + " " + "svc_" + forward.Client + "_20048;",
@@ -316,7 +400,7 @@ func createforward(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORW
 	}
 	record := []string{ //create forward record in record file
 		"\n",
-		forward.Src + ":" + forward.Dest + ":" + forward.Client,
+		forward.Src + ":" + forward.Dest + ":" + forward.Client + ":nfs",
 	}
 
 	recordFile, err := ReadFile(RecordPath)
@@ -380,7 +464,106 @@ func createforward(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORW
 	context.IndentedJSON(http.StatusCreated, forward) // return json requested
 }
 
-func removeforward(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS FUNCTION IS A BIT EXPENSIVE IT REQUIRE IN THE URI THIS DATA TO IDENTIFY THE RESOURCE: /:client/:src/:dest
+func createforwardsmb(context *gin.Context) { // CREATE A NEW FORWARD, REQUIRE FORWARD DATA IN JSON FORMAT LIKE "Forward" STRUCT
+
+	if err := restartnginx(); err != nil { // check if can run restartnginx script
+		if CanRestart == false { //check if configs file is not compromised
+			context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+			return
+		}
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantRunRestartNginx.Error()})
+		return
+	}
+
+	var forward ForwardRequest
+	if err := context.BindJSON(&forward); err != nil { //get forward data received and bind it to forward var
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrBadJsonFormat.Error()})
+		return
+	}
+	upstream445 := []string{ //create upstream20048 directive
+		"\n",
+		forward.Src + " " + "svc_" + forward.Client + "_445;",
+	}
+	upstream139 := []string{ //create upstream2049 directive
+		"\n",
+		forward.Src + " " + "svc_" + forward.Client + "_139;",
+	}
+
+	upstreams := []string{ //create upstreams directive
+		"\n",
+		"upstream svc_" + forward.Client + "_445{",
+		"\n",
+		"server " + forward.Dest + ":445;",
+		"\n",
+		"}",
+		"\n",
+		"upstream svc_" + forward.Client + "_139{",
+		"\n",
+		"server " + forward.Dest + ":139;",
+		"\n",
+		"}",
+	}
+	record := []string{ //create forward record in record file
+		"\n",
+		forward.Src + ":" + forward.Dest + ":" + forward.Client + ":smb",
+	}
+
+	recordFile, err := ReadFile(RecordPath)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadRecordFile.Error()})
+		return
+	}
+
+	for _, line := range recordFile { // check if forward to this Destination already exist
+		sline := strings.Split(line, ":")
+		if sline[1] == forward.Dest { // if already exist update all config files except for usptreams file
+			if err := WriteFile(Upstream445Path, upstream445); err != nil {
+				context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteUpstream20048File.Error()})
+			}
+			if err := WriteFile(Upstream139Path, upstream139); err != nil {
+				context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteUpstream2049File.Error()})
+			}
+			if err := WriteFile(RecordPath, record); err != nil {
+				context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteRecordFile.Error()})
+			}
+			if err := restartnginx(); err != nil { // restart nginx
+				if CanRestart == false {
+					context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+					return
+				}
+				context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
+				return
+			}
+			context.IndentedJSON(http.StatusCreated, forward) //return json requested
+			return
+		}
+	}
+	// if doesn't exist update all config files
+	if err := WriteFile(Upstream445Path, upstream445); err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteUpstream20048File.Error()})
+	}
+	if err := WriteFile(Upstream139Path, upstream139); err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteUpstream2049File.Error()})
+	}
+	if err := WriteFile(UpstreamsPath, upstreams); err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteUpstreamsFile.Error()})
+	}
+	if err := WriteFile(RecordPath, record); err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantWriteRecordFile.Error()})
+	}
+
+	if err := restartnginx(); err != nil { // restart nginx
+		if CanRestart == false {
+			context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+			return
+		}
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
+		return
+	}
+	context.IndentedJSON(http.StatusCreated, forward) // return json requested
+}
+
+func removeforwardnfs(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS FUNCTION IS A BIT EXPENSIVE IT REQUIRE IN THE URI THIS DATA TO IDENTIFY THE RESOURCE: /:client/:src/:dest
 
 	exist := false
 
@@ -476,10 +659,10 @@ func removeforward(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS F
 	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ RECORD FILE MODIFY
 
 	for i, line := range txtrecord {
-		if line == Src+":"+Dest+":"+Client {
+		if line == Src+":"+Dest+":"+Client+":nfs" {
 			exist = true
 
-			fmt.Println("forward found in: record")
+			fmt.Println("nfs forward found in: record")
 
 			txtrecord = removeline(txtrecord, i)
 			for i := range txtrecord {
@@ -780,7 +963,7 @@ func removeforward(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS F
 				context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
 				return
 			}
-			context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client})
+			context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client, Type: "nfs"})
 			return
 		} // destination ip address is no more used api can modify upstreams file
 	}
@@ -1026,7 +1209,590 @@ func removeforward(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS F
 		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
 		return
 	}
-	context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client}) // return json
+	context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client, Type: "nfs"}) // return json
+}
+
+func removeforwardsmb(context *gin.Context) { // REMOVE A FORWARD DIRECTIVE, THIS FUNCTION IS A BIT EXPENSIVE IT REQUIRE IN THE URI THIS DATA TO IDENTIFY THE RESOURCE: /:client/:src/:dest
+
+	exist := false
+
+	if err := restartnginx(); err != nil { //check if can restart nginx
+		if CanRestart == false { // check if config files is copromise
+			context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+			return
+		}
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantRunRestartNginx.Error()})
+		return
+	}
+
+	// get resource data by uri
+	Client := context.Param("client")
+	Src := context.Param("src")
+	Dest := context.Param("dest")
+
+	// read all config files
+	txtupstream445, err := ReadFile(Upstream445Path)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstream20048File.Error()})
+		return
+	}
+	txtupstream139, err := ReadFile(Upstream139Path)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstream2049File.Error()})
+		return
+	}
+	txtupstreams, err := ReadFile(UpstreamsPath)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstreamsFile.Error()})
+		return
+	}
+	txtrecord, err := ReadFile(RecordPath)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadRecordFile.Error()})
+		return
+	}
+
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ EXPLAIN
+	/*
+				   THIS API USE THE SAME LOGIC FOR ALL CONFIG FILE TO MODIFY
+				   THE FOLLOWING SCHEMA EXPLAIN HOW THE FOLLOWING CODE WORK
+				   SO YOU MUSTN'T READ USELESS COMMENT LINE:
+				   ARE PRESENT TWO ENTITY :
+				   -1 FILE (THE ORINAL CONFIGURATION FILE)
+				   -2 CHANGES (AN COPY OF ORIGINAL FILE USED FOR STORE CHANGES)
+
+				   IF CLAUSE:
+
+				   ---\ YES
+				   ---/
+
+				    ||
+				    ||
+				    \/
+				    NO
+				    ---------------------------------------------------------------------------------------------------------------------------------
+
+
+				   	  	 +------------+     +--------------+     ****************     *********************     +--------------+	  ********************	   +-------------+	   ******************  	  +-----------+	    *****************	  +----------+	   *********************	 +--------------+
+				   +-----|FIND FORWARD|-----|REMOVE FORWARD|-----*CHANGES EXIST?*-----*CAN REMOVE CHANGES?*-----|REMOVE CHANGES|------*CAN WRITE CHANGES?*-----|WRITE CHANGES|-----*CAN REMOVE FILE?*-----|REMOVE FILE|-----*CAN WRITE FILE?*-----|WRITE FILE|-----*CAN REMOVE CHANGES?*-----|REMOVE CHANGES|
+				   |     +------------+     +--------------+     ****************     *********************     +--------------+	  ********************	   +-------------+     ******************	  +-----------+	    *****************	  +----------+	   *********************	 +--------------+
+				   |												|						|												|											|										|										  |
+				   |												| 			+-----------+--------------+					+-----------+--------------+				   +--------+--------------+			   +--------+-------+					   +----------+---------------+
+			+------+----------+										|			|RETURN CANT REMOVE CHANGES|					|RETURN CANT REMOVE CHANGES|				   |RETURN CANT REMOVE FILE|			   |FILE COMPROMISED|					   |RETURN CANT REMOVE CHANGES|
+			|FORWARD NOT EXIST|										|			+--------------------------+					+--------------------------+				   +-----------------------+			   +----------------+					   +--------------------------+
+			+-----------------+										|
+				   													|
+				   													|
+				   													|
+				   											********************     +-------------+     ******************     +-----------+     ****************      +----------+     *********************     +--------------+
+				   											*CAN WRITE CHANGES?*-----|WRITE CHANGES|-----*CAN REMOVE FILE?*-----|REMOVE FILE|-----*CAN WRITE FILE?*-----|WRITE FILE|-----*CAN REMOVE CHANGES?*-----|REMOVE CHANGES|
+				   											********************     +-------------+     ******************     +-----------+     ****************      +----------+     *********************     +--------------+
+				   													|											|										 |										   |
+				   										+-----------+-------------+                  +----------+------------+                   +-------+--------+                    +-----------+--------------+
+				   										|RETURN CANT WRITE CHANGES|                  |RETURN CANT REMOVE FILE|				     |FILE COMPROMISED|					   |RETURN CANT REMOVE CHANGES|
+				   										+-------------------------+                  +-----------------------+                   +----------------+                    +--------------------------+
+		NOTE:
+		IF THE API CANT WRITE THE CONFIGURATION FILE (THEORETICALLY IT CAN'T HAPPEN)
+		THE API GLOBAL VAR CALLED "CanRestart" BECAME FALSE AND API FUNCTION EXIT
+		WITHOUT REMOVE CHANGES FILE SO UNTIL "CanRestart" IS FALSE EVERY RESTART TRY
+		OF NGINX SERVICE AND EVERY API FUNCTION WHO MODIFY CONFIGURATION FILE IS DENY, SO
+		SYSADMIN CAN RECOVERY LAST CONFIGURATION FILE FROM "/etc/nginx/record/changes.txt"
+		AND RESTORE IT MANNUALY.
+	*/
+
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ RECORD FILE MODIFY
+
+	for i, line := range txtrecord {
+		if line == Src+":"+Dest+":"+Client+":smb" {
+			exist = true
+
+			fmt.Println("smb forward found in: record")
+
+			txtrecord = removeline(txtrecord, i)
+			for i := range txtrecord {
+				if i < len(txtrecord)-1 {
+					txtrecord[i] = txtrecord[i] + "\n"
+				}
+			}
+
+			if _, err := os.Stat(ChangesPath); err != nil {
+				fmt.Println("changes file not found")
+				if err := WriteFile(ChangesPath, txtrecord); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file created")
+				if err := os.Remove(RecordPath); err != nil {
+					fmt.Println("cant remove record file")
+					return
+				}
+				fmt.Println("record file removed")
+				if err := WriteFile(RecordPath, txtrecord); err != nil {
+					fmt.Println("cant write record file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("record file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+			} else {
+				fmt.Println("changes file found")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+				if err := WriteFile(ChangesPath, txtrecord); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file writed")
+				if err := os.Remove(RecordPath); err != nil {
+					fmt.Println("cant remove record file")
+					if err := os.Remove(ChangesPath); err != nil {
+						fmt.Println("cant remove changes file")
+						return
+					}
+					fmt.Println("changes file removes")
+					return
+				}
+				fmt.Println("record file removed")
+				if err := WriteFile(RecordPath, txtrecord); err != nil {
+					fmt.Println("cant write record file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("record file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+				}
+				fmt.Println("changes file removed")
+			}
+		}
+	}
+
+	if exist == false {
+		context.IndentedJSON(http.StatusNotFound, Response{Message: ErrForwardNotFound.Error()})
+		return
+	}
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ UPSTREAM445 FILE MODIFY
+	for i, line := range txtupstream445 {
+		if line == Src+" "+"svc_"+Client+"_445;" {
+			fmt.Println("forward found in: upstream445")
+
+			txtupstream445 = removeline(txtupstream445, i)
+			for i := range txtupstream445 {
+				if i < len(txtupstream445)-1 {
+					txtupstream445[i] = txtupstream445[i] + "\n"
+				}
+			}
+
+			if _, err := os.Stat(ChangesPath); err != nil {
+				fmt.Println("changes file not found")
+				if err := WriteFile(ChangesPath, txtupstream445); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file created")
+				if err := os.Remove(Upstream445Path); err != nil {
+					fmt.Println("cant remove Upstream445 file")
+					return
+				}
+				fmt.Println("Upstream445 file removed")
+				if err := WriteFile(Upstream445Path, txtupstream445); err != nil {
+					fmt.Println("cant write upstream445 file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstream445 file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+			} else {
+				fmt.Println("changes file found")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+				if err := WriteFile(ChangesPath, txtupstream445); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file writed")
+				if err := os.Remove(Upstream445Path); err != nil {
+					fmt.Println("cant remove Upstream445 file")
+					if err := os.Remove(ChangesPath); err != nil {
+						fmt.Println("cant remove changes file")
+						return
+					}
+					fmt.Println("changes file removes")
+					return
+				}
+				fmt.Println("Upstream445 file removed")
+				if err := WriteFile(Upstream445Path, txtupstream445); err != nil {
+					fmt.Println("cant write Upstream445 file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstream445 file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+				}
+				fmt.Println("changes file removed")
+			}
+		}
+	}
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ UPSTREAM139 FILE MODIFY
+	for i, line := range txtupstream139 {
+		if line == Src+" "+"svc_"+Client+"_139;" {
+			fmt.Println("forward found in: upstream139")
+
+			txtupstream139 = removeline(txtupstream139, i)
+			for i := range txtupstream139 {
+				if i < len(txtupstream139)-1 {
+					txtupstream139[i] = txtupstream139[i] + "\n"
+				}
+			}
+
+			if _, err := os.Stat(ChangesPath); err != nil {
+				fmt.Println("changes file not found")
+				if err := WriteFile(ChangesPath, txtupstream139); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file created")
+				if err := os.Remove(Upstream139Path); err != nil {
+					fmt.Println("cant remove Upstream139 file")
+					return
+				}
+				fmt.Println("Upstream139 file removed")
+				if err := WriteFile(Upstream139Path, txtupstream139); err != nil {
+					fmt.Println("cant write upstream139 file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstream139 file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+			} else {
+				fmt.Println("changes file found")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+				if err := WriteFile(ChangesPath, txtupstream139); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file writed")
+				if err := os.Remove(Upstream139Path); err != nil {
+					fmt.Println("cant remove Upstream139 file")
+					if err := os.Remove(ChangesPath); err != nil {
+						fmt.Println("cant remove changes file")
+						return
+					}
+					fmt.Println("changes file removes")
+					return
+				}
+				fmt.Println("Upstream139 file removed")
+				if err := WriteFile(Upstream139Path, txtupstream139); err != nil {
+					fmt.Println("cant write Upstream139 file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstream139 file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+				}
+				fmt.Println("changes file removed")
+			}
+		}
+	}
+
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ UPSTREAMS FILE MODIFY
+	recordFile, err := ReadFile(RecordPath) // read new record file
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadRecordFile.Error()})
+		return
+	}
+
+	for _, line := range recordFile { //check new record file line for line
+		sline := strings.Split(line, ":")
+		if sline[1] == Dest { // if in the new record file the destination ip address to remove is used by another forward restart nginx without modify upstreams file
+			if err := restartnginx(); err != nil {
+				if CanRestart == false {
+					context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+					return
+				}
+				context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
+				return
+			}
+			context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client, Type: "smb"})
+			return
+		} // destination ip address is no more used api can modify upstreams file
+	}
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ UPSTREAMS PORT 445 CLAUSE
+	for i, line := range txtupstreams {
+		if line == "upstream svc_"+Client+"_445{" && txtupstreams[i+1] == "server "+Dest+":445;" {
+			fmt.Println("forward found in upstreams")
+
+			txtupstreams = removeline(txtupstreams, i)
+			txtupstreams = removeline(txtupstreams, i)
+			txtupstreams = removeline(txtupstreams, i)
+
+			for i := range txtupstreams {
+				if i < len(txtupstreams)-1 {
+					txtupstreams[i] = txtupstreams[i] + "\n"
+				}
+			}
+
+			if _, err := os.Stat(ChangesPath); err != nil {
+				fmt.Println("changes file not found")
+				if err := WriteFile(ChangesPath, txtupstreams); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file created")
+				if err := os.Remove(UpstreamsPath); err != nil {
+					fmt.Println("cant remove Upstreams file")
+					return
+				}
+				fmt.Println("Upstreams file removed")
+				if err := WriteFile(UpstreamsPath, txtupstreams); err != nil {
+					fmt.Println("cant write txt.txt")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstreams file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+			} else {
+				fmt.Println("changes file found")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+				if err := WriteFile(ChangesPath, txtupstreams); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file writed")
+				if err := os.Remove(UpstreamsPath); err != nil {
+					fmt.Println("cant remove Upstreams file")
+					if err := os.Remove(ChangesPath); err != nil {
+						fmt.Println("cant remove changes file")
+						return
+					}
+					fmt.Println("changes file removes")
+					return
+				}
+				fmt.Println("Upstreams file removed")
+				if err := WriteFile(UpstreamsPath, txtupstreams); err != nil {
+					fmt.Println("cant write Upstreams file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstreams file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+				}
+				fmt.Println("changes file removed")
+			}
+		}
+
+	}
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ UPSTREAMS PORT 139 CLAUSE
+	txtupstreams, err = ReadFile(UpstreamsPath)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: ErrCantReadUpstreamsFile.Error()})
+		return
+	}
+
+	for i, line := range txtupstreams {
+		if line == "upstream svc_"+Client+"_139{" && txtupstreams[i+1] == "server "+Dest+":139;" {
+			fmt.Println("forward found in upstreams")
+
+			txtupstreams = removeline(txtupstreams, i)
+			txtupstreams = removeline(txtupstreams, i)
+			txtupstreams = removeline(txtupstreams, i)
+
+			for i := range txtupstreams {
+				if i < len(txtupstreams)-1 {
+					txtupstreams[i] = txtupstreams[i] + "\n"
+				}
+			}
+
+			if _, err := os.Stat(ChangesPath); err != nil {
+				fmt.Println("changes file not found")
+				if err := WriteFile(ChangesPath, txtupstreams); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file created")
+				if err := os.Remove(UpstreamsPath); err != nil {
+					fmt.Println("cant remove Upstreams file")
+					return
+				}
+				fmt.Println("Upstreams file removed")
+				if err := WriteFile(UpstreamsPath, txtupstreams); err != nil {
+					fmt.Println("cant write txt.txt")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstreams file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+			} else {
+				fmt.Println("changes file found")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+					return
+				}
+				fmt.Println("changes file removed")
+				if err := WriteFile(ChangesPath, txtupstreams); err != nil {
+					fmt.Println("cant write changes file")
+					return
+				}
+				fmt.Println("changes file writed")
+				if err := os.Remove(UpstreamsPath); err != nil {
+					fmt.Println("cant remove Upstreams file")
+					if err := os.Remove(ChangesPath); err != nil {
+						fmt.Println("cant remove changes file")
+						return
+					}
+					fmt.Println("changes file removes")
+					return
+				}
+				fmt.Println("Upstreams file removed")
+				if err := WriteFile(UpstreamsPath, txtupstreams); err != nil {
+					fmt.Println("cant write Upstreams file")
+					CanRestart = false
+					return
+				}
+				fmt.Println("Upstreams file writed")
+				if err := os.Remove(ChangesPath); err != nil {
+					fmt.Println("cant remove changes file")
+				}
+				fmt.Println("changes file removed")
+			}
+		}
+
+	}
+
+	if err := restartnginx(); err != nil { // restart nginx
+		if CanRestart == false {
+			context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+			return
+		}
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantUpdateNginx.Error()})
+		return
+	}
+	context.IndentedJSON(http.StatusOK, Forward{Src: Src, Dest: Dest, Client: Client, Type: "smb"}) // return json
+}
+
+func cleanforward(context *gin.Context) {
+	if err := restartnginx(); err != nil { //check if can restart nginx
+		if CanRestart == false { // check if config files is copromise
+			context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCanRestartFalse.Error()})
+			return
+		}
+		context.IndentedJSON(http.StatusBadRequest, Response{Message: ErrCantRunRestartNginx.Error()})
+		return
+	}
+
+	if err := os.Remove(Upstream111Path); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(Upstream111Path, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(Upstream20048Path); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(Upstream20048Path, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(Upstream2049Path); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(Upstream2049Path, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(Upstream445Path); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(Upstream445Path, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(Upstream139Path); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(Upstream139Path, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(UpstreamsPath); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(UpstreamsPath, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+	if err := os.Remove(RecordPath); err != nil {
+		fmt.Println("cant remove record file")
+		return
+	}
+	fmt.Println("record file removed")
+	if err := WriteFile(RecordPath, []string{""}); err != nil {
+		fmt.Println("cant write record file")
+		CanRestart = false
+		return
+	}
+
+	if err := restartnginx(); err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, Response{Message: err.Error()}) // return json
+		return
+	}
+	context.IndentedJSON(http.StatusOK, Response{Message: "cleaned"}) // return json
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ MAIN FUNCTION
@@ -1061,8 +1827,13 @@ func main() {
 	router.GET("/apiproxy/rproxy/conf", getconfigs)
 	router.GET("/apiproxy/rproxy/status", getstatus)
 	router.GET("/apiproxy/rproxy/forward", getforward)
-	router.POST("/apiproxy/rproxy/forward", createforward)
-	router.DELETE("/apiproxy/rproxy/forward/:client/:src/:dest", removeforward)
+	router.GET("/apiproxy/rproxy/forward/nfs", getforwardnfs)
+	router.GET("/apiproxy/rproxy/forward/smb", getforwardsmb)
+	router.POST("/apiproxy/rproxy/forward/nfs", createforwardnfs)
+	router.POST("/apiproxy/rproxy/forward/smb", createforwardsmb)
+	router.DELETE("/apiproxy/rproxy/forward/nfs/:client/:src/:dest", removeforwardnfs)
+	router.DELETE("/apiproxy/rproxy/forward/smb/:client/:src/:dest", removeforwardsmb)
+	router.DELETE("/apiproxy/rproxy/forward/", cleanforward)
 	router.Run("0.0.0.0:4444")
 
 }

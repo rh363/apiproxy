@@ -17,6 +17,9 @@ This api have some requirement:
 
 This api work reading nginx configuration files so is very important to respect this guide standard. \
 The api and the nginx server configuration files as be tested only on debian OS. \
+For configure nginx is possible follow this guide or running the configurenginx.sh script. \
+It require the ip address when nginx must listen and the path to apiproxy executable. \
+This script only work on ubuntu and debian OS. Must be updated and tested run it on your own. \
 
 To get started you need to install Nginx: 
 

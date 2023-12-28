@@ -33,7 +33,7 @@ Now you can download nginx configuration files avaible in this repo and apply ne
 ``` bash
 sudo mv nginx.conf /etc/nginx/nginx.conf
 mkdir /etc/nginx/restart
-sudo mv restart.sh /etc/nginx/restart.sh
+sudo mv restart.sh /etc/nginx/restart/restart.sh
 ```
 Before apply rproxy.conf you have to modify some line for insert your listening server ip address: ```sudo vi rproxy.conf ```
 

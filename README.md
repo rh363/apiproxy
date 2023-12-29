@@ -110,7 +110,7 @@ To conclude we only have to create some empty file who api populate and use for 
 sudo mkdir /etc/nginx/conf
 sudo mkdir /etc/nginx/record
 cd /etc/nginx/conf
-sudo touch upstream20048.conf upstream2049.conf upstream111.conf upstream445.conf upstream139.conf upstreams.conf
+sudo touch upstream20048.config upstream2049.config upstream111.config upstream445.config upstream139.config upstreams.config
 cd /etc/nginx/record
 sudo touch record.txt
 ```
